@@ -295,6 +295,8 @@ fork(void)
 
   np->state = RUNNABLE;
 
+  np->mask = p->mask;  // for lab2 tracing
+
   release(&np->lock);
 
   return pid;
@@ -691,5 +693,15 @@ procdump(void)
       state = "???";
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
+  }
+}
+void
+getprocnum(uint64* cnt)
+{
+  struct proc *p;
+  *cnt = 0;
+  for(p = proc; p < &proc[NPROC]; p++){
+    if(p->state != UNUSED)
+      *cnt += 1;
   }
 }

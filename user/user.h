@@ -1,5 +1,6 @@
 struct stat;
 struct rtcdate;
+struct sysinfo; // for lab2 sysinfo
 
 // system calls
 int fork(void);
@@ -23,6 +24,8 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+int trace(int); // for lab2 trace
+int sysinfo(struct sysinfo *); // for lab2 sysinfo
 
 // ulib.c
 int stat(const char*, struct stat*);
