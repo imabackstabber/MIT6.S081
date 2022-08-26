@@ -165,6 +165,7 @@ freeproc(struct proc *p)
   if(p->kernelpt){
     // kernel stack of proc need to be free
     uvmunmap(p->kernelpt, p->kstack,1,1);
+    p->kstack = 0;
     // then free whole pagetable
     uvm_kpgtbl_free(p->kernelpt);
   }
