@@ -5,6 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "proc.h"
 
 /*
  * the kernel's page table.
@@ -14,6 +16,35 @@ pagetable_t kernel_pagetable;
 extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
+
+/*
+ * for lab3 uvm_pagetable_init()
+ */
+void
+uvmmap(pagetable_t pgtbl, uint64 va, uint64 pa, uint64 sz, int perm)
+{
+  if(mappages(pgtbl, va, sz, pa, perm) != 0)
+    panic("uvmmap");
+}
+
+/*
+ * for lab3, do what kvminit() do
+ */
+void uvm_pagetable_init(struct proc* p)
+{
+  p->kernelpt = (pagetable_t) kalloc();
+  if(p->kernelpt == 0) return;
+  memset(p->kernelpt, 0, PGSIZE);
+  // just map as kernel does
+  uvmmap(p->kernelpt, UART0, UART0, PGSIZE, PTE_R | PTE_W);
+  uvmmap(p->kernelpt, VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
+  uvmmap(p->kernelpt, CLINT, CLINT, 0x10000, PTE_R | PTE_W);
+  uvmmap(p->kernelpt, PLIC, PLIC, 0x400000, PTE_R | PTE_W);
+  uvmmap(p->kernelpt, KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
+  uvmmap(p->kernelpt, (uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
+  uvmmap(p->kernelpt, TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
+}
+
 
 /*
  * create a direct-map page table for the kernel.
@@ -132,7 +163,9 @@ kvmpa(uint64 va)
   pte_t *pte;
   uint64 pa;
   
-  pte = walk(kernel_pagetable, va, 0);
+  // pte = walk(kernel_pagetable, va, 0);
+  // for lab3, use proc kernel pagetable instead
+  pte = walk(myproc()->kernelpt, va, 0);
   if(pte == 0)
     panic("kvmpa");
   if((*pte & PTE_V) == 0)
@@ -284,6 +317,26 @@ freewalk(pagetable_t pagetable)
       pagetable[i] = 0;
     } else if(pte & PTE_V){
       panic("freewalk: leaf");
+    }
+  }
+  kfree((void*)pagetable);
+}
+
+// for lab3 freeproc
+// Recursively free page-table pages
+// remove leaf mapping too
+void
+uvm_kpgtbl_free(pagetable_t pagetable)
+{
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
+      // this PTE points to a lower-level page table.
+      uint64 child = PTE2PA(pte);
+      uvm_kpgtbl_free((pagetable_t)child);
+      pagetable[i] = 0;
+    } else if(pte & PTE_V){
+      pagetable[i] = 0;
     }
   }
   kfree((void*)pagetable);

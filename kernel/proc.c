@@ -34,12 +34,12 @@ procinit(void)
       // Allocate a page for the process's kernel stack.
       // Map it high in memory, followed by an invalid
       // guard page.
-      char *pa = kalloc();
-      if(pa == 0)
-        panic("kalloc");
-      uint64 va = KSTACK((int) (p - proc));
-      kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-      p->kstack = va;
+      // char *pa = kalloc();
+      // if(pa == 0)
+      //   panic("kalloc");
+      // uint64 va = KSTACK((int) (p - proc));
+      // kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+      // p->kstack = va;
   }
   kvminithart();
 }
@@ -121,6 +121,26 @@ found:
     return 0;
   }
 
+  // for lab3, alloc kernel pgtbl
+  // An mapped kernel pgtbl
+  uvm_pagetable_init(p);
+  if(p->kernelpt == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+
+  // for lab3, alloc kernel stack to kernelpt of process
+  // Allocate a page for the process's kernel stack.
+  // Map it high in memory, followed by an invalid
+  // guard page.
+  char *pa = kalloc();
+  if(pa == 0)
+    panic("kstack: kalloc");
+  uint64 va = KSTACK((int) (p - proc));
+  uvmmap(p->kernelpt, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+  p->kstack = va;
+
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -141,6 +161,13 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  // here for lab3, free kernel pagetable
+  if(p->kernelpt){
+    // kernel stack of proc need to be free
+    uvmunmap(p->kernelpt, p->kstack,1,1);
+    // then free whole pagetable
+    uvm_kpgtbl_free(p->kernelpt);
+  }
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -473,7 +500,15 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+
+        // for lab3, use kernelpt of process as kernel pagetable
+        w_satp(MAKE_SATP(p->kernelpt));
+        sfence_vma();
+
         swtch(&c->context, &p->context);
+
+        // for lab3, and then change back to global kernel pagetable
+        kvminithart();
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
