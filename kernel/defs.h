@@ -161,6 +161,7 @@ int             uartgetc(void);
 void            uvmmap(pagetable_t, uint64, uint64, uint64, int);
 void            uvm_pagetable_init(struct proc*);
 void            uvm_kpgtbl_free(pagetable_t);
+void            u2kvmcopy(pagetable_t, pagetable_t, uint64, uint64);
 void            kvminit(void);
 void            kvminithart(void);
 uint64          kvmpa(uint64);
@@ -205,6 +206,10 @@ void            statsinc(void);
 
 // sprintf.c
 int             snprintf(char*, int, char*, ...);
+
+// vmcopyin.c
+int             copyin_new(pagetable_t, char *, uint64, uint64);
+int             copyinstr_new(pagetable_t, char *, uint64, uint64);
 
 #ifdef LAB_NET
 // pci.c

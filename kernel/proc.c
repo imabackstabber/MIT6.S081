@@ -249,6 +249,9 @@ userinit(void)
   uvminit(p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
 
+  // for lab3, copy again
+  u2kvmcopy(p->pagetable, p->kernelpt, 0, p->sz);
+
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;      // user program counter
   p->trapframe->sp = PGSIZE;  // user stack pointer
@@ -270,6 +273,12 @@ growproc(int n)
   struct proc *p = myproc();
 
   sz = p->sz;
+
+  // for lab3 copyin PLIC
+  if(PGROUNDUP(sz + n) > PLIC){
+    return -1;
+  }
+  
   if(n > 0){
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
@@ -277,6 +286,8 @@ growproc(int n)
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
+  // for lab3 , copy again here
+  u2kvmcopy(p->pagetable, p->kernelpt, p->sz, sz);
   p->sz = sz;
   return 0;
 }
@@ -302,6 +313,8 @@ fork(void)
     return -1;
   }
   np->sz = p->sz;
+
+  u2kvmcopy(np->pagetable, np->kernelpt, 0, np->sz); // for lab3 copyin-new
 
   np->parent = p;
 
