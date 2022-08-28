@@ -94,6 +94,13 @@ struct proc {
   int xstate;                  // Exit status to be returned to parent's wait
   int pid;                     // Process ID
 
+  // for lab4 alarm
+  int ticks;
+  uint64 handler;
+  int last_tick;
+  struct trapframe *alarm_trapframe;
+  int in_alarm;
+
   // these are private to the process, so p->lock need not be held.
   uint64 kstack;               // Virtual address of kernel stack
   uint64 sz;                   // Size of process memory (bytes)

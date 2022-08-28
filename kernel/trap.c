@@ -80,6 +80,16 @@ usertrap(void)
   if(which_dev == 2)
     yield();
 
+  // for lab4, count ticks
+  if(which_dev == 2){
+    if((p->in_alarm == 0)&& p->ticks &&(ticks - p->last_tick == p->ticks)){
+      memmove(p->alarm_trapframe, p->trapframe, (uint64)sizeof(struct trapframe));
+      p->last_tick = ticks;
+      p->trapframe->epc = p->handler;
+      p->in_alarm = 1; // avoid entering again
+    }
+  }
+
   usertrapret();
 }
 
