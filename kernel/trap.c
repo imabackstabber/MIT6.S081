@@ -65,6 +65,25 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if((r_scause() == 13) || (r_scause() == 15)){
+    uint64 va = r_stval();
+    if(va > p->sz){ // kill invalid addr
+      p->killed = 1;
+    } else if(va <= PGROUNDDOWN(p->trapframe->sp)){ // invalid page below user stack
+      p->killed = 1;
+    } else{
+      char* mem = kalloc();
+      if(mem == 0){
+        p->killed = 1; // kill proc due to oom
+      } else{
+        memset(mem, 0, PGSIZE);
+        va = PGROUNDDOWN(va);
+        if(mappages(p->pagetable, va, PGSIZE, (uint64)mem, PTE_W | PTE_R| PTE_X| PTE_U) != 0){
+          kfree(mem);
+          p->killed = 1; // kill proc due to mappages
+        }
+      }
+    }
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
