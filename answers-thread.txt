@@ -1,0 +1,4 @@
+because insertion in the head is not safe for concurrence situation.
+a: e->next = n -> interrupt
+b: e->next = n -> interrupt
+then it will messed up.
