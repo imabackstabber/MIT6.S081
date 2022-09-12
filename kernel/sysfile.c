@@ -340,6 +340,46 @@ sys_open(void)
   f->ip = ip;
   f->readable = !(omode & O_WRONLY);
   f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
+  
+  if(ip->type == T_SYMLINK){
+    if(!(omode & O_NOFOLLOW)){
+      int depth = 0;
+      int tot;
+      struct inode * nxt;
+      while(ip->type == T_SYMLINK && depth < 10){
+        depth++;
+        // fail to read inode data
+        if((tot = readi(ip, 0, (uint64)path, 0, MAXPATH)) <= 0){
+          myproc()->ofile[fd] = 0; // close fd
+          fileclose(f); // close file
+          iunlockput(ip);
+          end_op();
+          return -1;
+        }
+        // fail data doesn't exist
+        if((nxt = namei(path)) == 0){
+          myproc()->ofile[fd] = 0; // close fd
+          fileclose(f); // close file
+          iunlockput(ip);
+          end_op();
+          return -1;
+        }
+        iunlock(ip);
+        ip = nxt;
+        ilock(nxt);
+        f->ip = ip;
+      }
+      if(depth >= 10){
+        // so many follows
+        myproc()->ofile[fd] = 0; // close fd
+        fileclose(f); // close file
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
+    }
+  }
+  
 
   if((omode & O_TRUNC) && ip->type == T_FILE){
     itrunc(ip);
@@ -482,5 +522,32 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+// return -1 on failure, 0 on success
+uint64
+sys_symlink(void)
+{
+  char target[MAXPATH], path[MAXPATH];
+  
+  // return -1 on arg err
+  if(argstr(0,target,MAXPATH) < 0 || argstr(1,path,MAXPATH) < 0)
+    return -1;
+  struct inode* ip;
+  begin_op();
+  if((ip = create(path, T_SYMLINK, 0, 0)) == 0){
+    end_op();
+    return -1;
+  }
+  // write data block
+  int tot;
+  if((tot = writei(ip, 0, (uint64)target, 0, MAXPATH)) != MAXPATH){
+    end_op();
+    return -1;
+  }
+  iunlockput(ip);
+  end_op();
+  // return 0 on success
   return 0;
 }
