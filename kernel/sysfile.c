@@ -364,7 +364,7 @@ sys_open(void)
           end_op();
           return -1;
         }
-        iunlock(ip);
+        iunlockput(ip);
         ip = nxt;
         ilock(nxt);
         f->ip = ip;
@@ -373,7 +373,9 @@ sys_open(void)
         // so many follows
         myproc()->ofile[fd] = 0; // close fd
         fileclose(f); // close file
-        iunlockput(ip);
+        if(holdingsleep(&ip->lock)){
+          releasesleep(&ip->lock);
+        }
         end_op();
         return -1;
       }
