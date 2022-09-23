@@ -5,6 +5,10 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "sleeplock.h"
+#include "fcntl.h"
+#include "fs.h"
+#include "file.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -49,8 +53,9 @@ usertrap(void)
   
   // save user program counter.
   p->trapframe->epc = r_sepc();
+  uint64 cause = r_scause();
   
-  if(r_scause() == 8){
+  if(cause == 8){
     // system call
 
     if(p->killed)
@@ -67,6 +72,49 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if(cause == 13 || cause == 15) {
+    // handle mmap page fault
+    uint64 fault_va = r_stval();  
+    char* pa;                     
+    // we have to search which vma it should be in
+    struct proc* p = myproc();
+    uint64 prot = 0;
+    uint64 offset = 0;
+    uint64 length = 0;
+    struct file* f = 0;
+    int vma_idx = -1;
+    for(int i = 0;i < MAX_VMA;i++){
+      if(p->vma_table[i].file != 0 && fault_va >= p->vma_table[i].addr && 
+          fault_va <= (p->vma_table[i].addr + p->vma_table[i].len)){
+        // it falls into this part.
+        prot = p->vma_table[i].prot;
+        f = p->vma_table[i].file;
+        length = p->vma_table[i].len;
+        // should break(but if vmas are set correctly, it won't have to break)
+        vma_idx = i;
+      }
+    }
+    offset = p->vma_table[vma_idx].offset + fault_va - p->vma_table[vma_idx].addr;
+    if(f != 0 && (pa = kalloc()) != 0) {
+        memset(pa, 0, PGSIZE);
+        int flags = PTE_U;
+        if(prot & PROT_READ) flags |= PTE_R;
+        if(prot & PROT_WRITE) flags |= PTE_W;
+        if(prot & PROT_EXEC) flags |= PTE_X;
+        // map a new page
+        if(mappages(p->pagetable, PGROUNDDOWN(fault_va), PGSIZE, (uint64)pa, flags) != 0) {
+          kfree(pa);
+          p->killed = 1;
+        } 
+        // move file content for it
+        acquiresleep(&f->ip->lock);
+        uint len = (length - offset > 4096)?4096:length - offset;
+        readi(f->ip, 1, PGROUNDDOWN(fault_va), offset, len);
+        releasesleep(&f->ip->lock);
+    } else {
+      // printf("usertrap(): out of memory!\n");
+      p->killed = 1;
+    }
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());

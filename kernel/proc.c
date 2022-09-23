@@ -284,6 +284,14 @@ fork(void)
 
   np->parent = p;
 
+  // copy the vma table
+  for(int i = 0;i < MAX_VMA;i++){
+    if(p->vma_table[i].file){
+      np->vma_table[i] = p->vma_table[i];
+      filedup(np->vma_table[i].file); // inc ref cnt
+    }
+  }
+
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
@@ -357,6 +365,21 @@ exit(int status)
   iput(p->cwd);
   end_op();
   p->cwd = 0;
+
+  // unmap all mmaped pages
+  for(int i = 0;i < MAX_VMA;i++){
+    if(p->vma_table[i].file){
+      fileclose(p->vma_table[i].file); // file close
+      p->vma_table[i].file = 0;
+      // then unmap the page included
+      uint64 addr = p->vma_table[i].addr;
+      uint64 len = p->vma_table[i].len;
+      // uint64 va = PGROUNDDOWN(addr);
+      uint64 va = PGROUNDUP(addr);
+      uint64 npages = len / PGSIZE;
+      uvmunmap(p->pagetable, va, npages, 1);
+    }
+  }
 
   // we might re-parent a child to init. we can't be precise about
   // waking up init, since we can't acquire its lock once we've

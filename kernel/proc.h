@@ -82,6 +82,19 @@ struct trapframe {
 
 enum procstate { UNUSED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+
+// vma state
+struct vma{
+  uint64 addr;
+  uint64 len;
+  uint64 flags;
+  uint64 offset;
+  uint64 prot;
+  struct file *file;
+};
+// const int MAX_VMA = 16;
+#define MAX_VMA 16
+
 // Per-process state
 struct proc {
   struct spinlock lock;
@@ -94,6 +107,7 @@ struct proc {
   int xstate;                  // Exit status to be returned to parent's wait
   int pid;                     // Process ID
 
+  struct vma vma_table[MAX_VMA];         // Stores VMA     
   // these are private to the process, so p->lock need not be held.
   uint64 kstack;               // Virtual address of kernel stack
   uint64 sz;                   // Size of process memory (bytes)
