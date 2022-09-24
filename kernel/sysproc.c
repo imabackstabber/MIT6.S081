@@ -163,7 +163,7 @@ sys_munmap(void)
     }  
   }
   // write-back checker
-  if(p->vma_table[vma_idx].flags & MAP_SHARED){
+  if((p->vma_table[vma_idx].flags & MAP_SHARED) && (p->vma_table[vma_idx].prot & PROT_WRITE)){
     filewrite(p->vma_table[vma_idx].file, addr, len); // write back then
   }
   // please check whether file is fully released

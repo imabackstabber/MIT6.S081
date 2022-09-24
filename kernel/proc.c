@@ -5,6 +5,10 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "sleeplock.h"
+#include "fcntl.h"
+#include "fs.h"
+#include "file.h"
 
 struct cpu cpus[NCPU];
 
@@ -369,6 +373,10 @@ exit(int status)
   // unmap all mmaped pages
   for(int i = 0;i < MAX_VMA;i++){
     if(p->vma_table[i].file){
+      // write-back checker
+      if((p->vma_table[i].flags & MAP_SHARED) && (p->vma_table[i].prot & PROT_WRITE)){
+        filewrite(p->vma_table[i].file, p->vma_table[i].addr, p->vma_table[i].len); // write back then
+      }
       fileclose(p->vma_table[i].file); // file close
       p->vma_table[i].file = 0;
       // then unmap the page included
